@@ -69,4 +69,4 @@ This project is licensed under the CC0-1.0 License - see the [LICENSE](LICENSE) 
 - Original shelter project by uwu.network
 - The Discord client modding community
 - All our contributors and users
-PS: If shelter wants me to takedown this fork, i'm more than pleased to do so.
+- PS: If shelter wants me to takedown this fork, i'm more than pleased to do so.
