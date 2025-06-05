@@ -17,17 +17,13 @@ import { registerInjSection, setInjectorSections } from "./settings";
 import { batch, untrack } from "solid-js";
 import { IDBPDatabase, openDB } from "idb";
 
-// note that these controls only apply to the UI, not to the APIs
+// Type definitions
 export type LoaderIntegrationOpts = {
-  // actions that the end user is shown on the UI
   allowedActions: { toggle?: true; delete?: true; edit?: true; update?: true };
-  // is the plugin visible in the ui, or hidden from sight?
   isVisible: boolean;
-  // a name to show in the info tooltip for the loader
   loaderName?: string;
 };
 
-// Add new plugin lifecycle hooks
 export type PluginLifecycleHooks = {
   onLoad?(): void | Promise<void>;
   onUnload?(): void | Promise<void>;
@@ -36,7 +32,6 @@ export type PluginLifecycleHooks = {
   onSettingsChange?(settings: Record<string, any>): void | Promise<void>;
 };
 
-// Add plugin metadata
 export type PluginMetadata = {
   name: string;
   description: string;
@@ -52,7 +47,7 @@ export type PluginMetadata = {
   hash?: string;
 };
 
-// Add store symbols
+// Store symbols
 export const symWait = Symbol("wait");
 export const symDb = Symbol("db");
 export const symSig = Symbol("sig");
@@ -68,19 +63,46 @@ interface PluginUsageStats {
   totalUptime?: number;
 }
 
-// Update store creation to use storage function
+// Rest of type definitions
+export type StoredPlugin = PluginMetadata & {
+  local: boolean;
+  src: string;
+  update?: boolean;
+  manifest: PluginMetadata;
+  js: string;
+  on: boolean;
+  enabledAt?: number;
+  disabledAt?: number;
+  lastError?: string;
+  lastUpdated?: number;
+  injectorIntegration?: LoaderIntegrationOpts;
+  usageStats?: PluginUsageStats;
+  store: ShelterStore<unknown>;
+};
+
+export type EvaledPlugin = {
+  onLoad?(): void | Promise<void>;
+  onUnload?(): void | Promise<void>;
+  onUpdate?(): void | Promise<void>;
+  onError?(error: Error): void | Promise<void>;
+  onSettingsChange?(settings: Record<string, any>): void | Promise<void>;
+  settings?: Component;
+  scopedDispose(): void;
+};
+
+export type PluginStore = Record<string, StoredPlugin>;
+
+// Store creation function
 async function createStorage<T>(pluginId: string): Promise<[ShelterStore<T>, () => void]> {
   if (!isInited(pluginStorages)) {
     throw new Error("to keep data persistent, plugin storages must not be created until connected to IDB");
   }
 
-  // Create store with proper type
   const store = storage<T>(`plugin-${pluginId}`) as unknown as ShelterStore<T>;
   const flushStore = () => {
     // Storage is automatically persisted
   };
 
-  // Make store iterable
   Object.defineProperty(store, Symbol.iterator, {
     value: function* () {
       for (const key in store) {
@@ -98,67 +120,37 @@ async function createStorage<T>(pluginId: string): Promise<[ShelterStore<T>, () 
     configurable: true,
   });
 
-  // Wait for store to be initialized
   await waitInit(store);
-
   return [store, flushStore];
 }
 
-// Update plugin type to use proper store type
-export interface StoredPlugin extends PluginMetadata {
-  local: boolean;
-  src: string;
-  update?: boolean;
-  manifest: PluginMetadata;
-  js: string;
-  on: boolean;
-  enabledAt?: number;
-  disabledAt?: number;
-  lastError?: string;
-  lastUpdated?: number;
-  injectorIntegration?: LoaderIntegrationOpts;
-  usageStats?: PluginUsageStats;
-  store: ShelterStore<unknown>;
-}
-
-// Update evaled plugin type
-export type EvaledPlugin = {
-  onLoad?(): void | Promise<void>;
-  onUnload?(): void | Promise<void>;
-  onUpdate?(): void | Promise<void>;
-  onError?(error: Error): void | Promise<void>;
-  onSettingsChange?(settings: Record<string, any>): void | Promise<void>;
-  settings?: Component;
-  scopedDispose(): void;
-};
-
-// Restore missing declarations with proper types
+// Internal state
 const pluginStorages = storage("plugins-data") as unknown as ShelterStore<Record<string, any>>;
 const [internalLoaded, setInternalLoaded] = createSignal<Record<string, EvaledPlugin>>({});
 const loadedPlugins = createMutable<Record<string, EvaledPlugin>>({});
-
-// dear god do not let these go anywhere other than data.ts
-export { internalData as UNSAFE_internalData, pluginStorages as UNSAFE_pluginStorages };
-
-// Update type definitions and helper functions
-type PluginStore = Record<string, StoredPlugin>;
 const internalData = storage<PluginStore>("plugins-internal") as unknown as ShelterStore<PluginStore>;
 
-// Helper function to safely update plugin data
-function updatePluginData(id: string, plugin: StoredPlugin) {
-  (internalData as unknown as Record<string, StoredPlugin>)[id] = plugin;
-}
+// Create signal for installed plugins with proper typing
+const [getInstalledPlugins, setInstalledPlugins] = createSignal<PluginStore>(internalData as unknown as PluginStore);
 
-// Helper function to get plugin data
-function getPluginData(id: string): StoredPlugin | undefined {
+// Export readonly accessor for installed plugins
+export const installedPlugins = () => getInstalledPlugins();
+
+// Export loaded plugins store
+export { loadedPlugins };
+
+// Helper functions
+export function getPluginData(id: string): StoredPlugin | undefined {
   return (internalData as unknown as Record<string, StoredPlugin>)[id];
 }
 
-// Update signal creation to use proper type and accessor
-const [getInstalledPlugins, setInstalledPlugins] = createSignal<PluginStore>(internalData as unknown as PluginStore);
-export const installedPlugins = () => getInstalledPlugins();
+export function updatePluginData(id: string, plugin: Partial<StoredPlugin>) {
+  const existing = getPluginData(id);
+  if (!existing) throw new Error(`attempted to update non-existent plugin: ${id}`);
+  (internalData as unknown as Record<string, StoredPlugin>)[id] = { ...existing, ...plugin };
+}
 
-// Update plugin management functions to use helpers
+// Add local plugin with validation
 export function addLocalPlugin(id: string, plugin: StoredPlugin) {
   if (typeof id !== "string" || untrack(() => getPluginData(id)) || id === devModeReservedId)
     throw new Error("plugin ID invalid or taken");
