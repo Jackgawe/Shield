@@ -76,8 +76,8 @@ jobs:
       - name: Build and Deploy Documentation
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          pnpm build:docs
-          cd packages/shield-docs
+          pnpm --filter shelter-docs run build
+          cd packages/shelter-docs
           touch .nojekyll
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
