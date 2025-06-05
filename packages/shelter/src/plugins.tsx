@@ -132,7 +132,7 @@ export type EvaledPlugin = {
   scopedDispose(): void;
 };
 
-// Restore missing declarations
+// Restore missing declarations with proper types
 const pluginStorages = storage("plugins-data") as unknown as ShelterStore<Record<string, any>>;
 const [internalLoaded, setInternalLoaded] = createSignal<Record<string, EvaledPlugin>>({});
 const loadedPlugins = createMutable<Record<string, EvaledPlugin>>({});
@@ -141,19 +141,17 @@ const loadedPlugins = createMutable<Record<string, EvaledPlugin>>({});
 export { internalData as UNSAFE_internalData, pluginStorages as UNSAFE_pluginStorages };
 
 // Update type definitions and helper functions
-type PluginStore = ShelterStore<Record<string, StoredPlugin>> & { [key: string]: StoredPlugin };
-const internalData = storage<Record<string, StoredPlugin>>("plugins-internal") as unknown as PluginStore;
+type PluginStore = Record<string, StoredPlugin>;
+const internalData = storage<PluginStore>("plugins-internal") as unknown as ShelterStore<PluginStore>;
 
 // Helper function to safely update plugin data
 function updatePluginData(id: string, plugin: StoredPlugin) {
-  (internalData as any)[id] = plugin;
+  (internalData as unknown as Record<string, StoredPlugin>)[id] = plugin;
 }
 
-// Helper function to safely get plugin data
-function getPluginData(id: string): StoredPlugin {
-  const data = internalData[id];
-  if (!data) throw new Error(`attempted to get data for non-existent plugin: ${id}`);
-  return data;
+// Helper function to get plugin data
+function getPluginData(id: string): StoredPlugin | undefined {
+  return (internalData as unknown as Record<string, StoredPlugin>)[id];
 }
 
 // Update plugin management functions to use helpers
@@ -313,8 +311,11 @@ export async function startAllPlugins() {
 
 const stopAllPlugins = () => Object.keys(internalData).forEach(stopPlugin);
 
-export const installedPlugins = createSignal(internalData);
+// Update signal creation to use proper type
+export const installedPlugins = createSignal<PluginStore>(internalData as unknown as PluginStore);
 export { loadedPlugins };
+
+// Update plugin API creation
 async function createPluginApi(pluginId: string, plugin: StoredPlugin) {
   const [store, flushStore] = await createStorage(pluginId);
   const scoped = createScopedApiInternal(window["shelter"].flux.dispatcher, !!plugin.injectorIntegration);
@@ -690,7 +691,8 @@ export function showSettingsFor(id: string) {
   return new Promise<void>((res) => {
     openModal((mprops) => {
       onCleanup(res);
-      const plugin = untrack(() => internalData[id]) as StoredPlugin;
+      const plugin = getPluginData(id);
+      if (!plugin) throw new Error(`cannot show settings for non-existent plugin ${id}`);
       return (
         <ModalRoot>
           <ModalHeader close={mprops.close}>Settings - {plugin.name}</ModalHeader>
@@ -703,9 +705,16 @@ export function showSettingsFor(id: string) {
 
 // Update plugin store handling
 export function getPluginStore<T>(pluginId: string): ShelterStore<T> {
-  const data = untrack(() => internalData[pluginId]) as unknown as StoredPlugin;
+  const data = getPluginData(pluginId);
   if (!data) throw new Error(`attempted to get store for non-existent plugin: ${pluginId}`);
   return data.store as unknown as ShelterStore<T>;
+}
+
+// Update plugin data access
+export function getPlugin(id: string): StoredPlugin {
+  const data = getPluginData(id);
+  if (!data) throw new Error(`attempted to get data for non-existent plugin: ${id}`);
+  return data;
 }
 
 // Update plugin manifest access
