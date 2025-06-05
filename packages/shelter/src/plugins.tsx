@@ -47,6 +47,7 @@ export type PluginMetadata = {
   tags?: string[];
   minShieldVersion?: string;
   maxShieldVersion?: string;
+  hash?: string;
 };
 
 // Enhance StoredPlugin type
@@ -149,21 +150,26 @@ export type ShelterPluginApi = ReturnType<typeof createPluginApi>;
 // Add plugin validation
 function validatePlugin(plugin: StoredPlugin): string[] {
   const errors: string[] = [];
-  
+
   if (!plugin.manifest.name) errors.push("Plugin must have a name");
   if (!plugin.manifest.version) errors.push("Plugin must have a version");
   if (!plugin.manifest.author) errors.push("Plugin must have an author");
-  
+
   // Version format validation
   if (plugin.manifest.version && !/^\d+\.\d+\.\d+$/.test(plugin.manifest.version)) {
     errors.push("Version must follow semver format (x.y.z)");
   }
-  
+
+  // Hash validation (if present)
+  if (plugin.manifest.hash && typeof plugin.manifest.hash !== "string") {
+    errors.push("Hash must be a string if present");
+  }
+
   // Shield version compatibility check
   if (plugin.manifest.minShieldVersion) {
     // Add version comparison logic here
   }
-  
+
   return errors;
 }
 
@@ -185,7 +191,7 @@ function createPluginSandbox(pluginId: string, api: ShelterPluginApi) {
     },
     // Add more sandboxed APIs
   };
-  
+
   return sandbox;
 }
 
@@ -223,7 +229,7 @@ export async function startPlugin(pluginId: string) {
     // Create a more secure evaluation context
     const pluginString = `shelter=>{return ${data.js}}${atob("Ci8v")}# sourceURL=s://!SHELTER/${pluginId}`;
     const rawPlugin: EvaledPlugin & PluginLifecycleHooks = (0, eval)(pluginString)(shelterPluginEdition);
-    
+
     // Clone and enhance plugin
     const plugin = {
       ...rawPlugin,
@@ -231,7 +237,7 @@ export async function startPlugin(pluginId: string) {
       manifest: data.manifest,
       id: pluginId,
     };
-    
+
     internalLoaded[pluginId] = plugin;
 
     // Handle async onLoad
@@ -245,12 +251,12 @@ export async function startPlugin(pluginId: string) {
     internalData[pluginId] = { ...data, on: true, lastError: undefined };
   } catch (e) {
     const error = e instanceof Error ? e : new Error(String(e));
-    
+
     // Update error stats
     data.usageStats.errorCount = (data.usageStats?.errorCount ?? 0) + 1;
     data.lastError = error.message;
     data.disabledAt = Date.now();
-    
+
     // Call error handler if available
     try {
       await Promise.resolve(internalLoaded[pluginId]?.onError?.(error));
@@ -267,7 +273,7 @@ export async function startPlugin(pluginId: string) {
 
     delete internalLoaded[pluginId];
     internalData[pluginId] = { ...data, on: false };
-    
+
     throw error;
   }
 }
@@ -331,18 +337,18 @@ export async function updatePlugin(pluginId: string) {
   if (checked) {
     const oldVersion = internalData[pluginId].manifest.version;
     editPlugin(pluginId, checked, true);
-    
+
     // Notify plugin of update
     try {
       await Promise.resolve(internalLoaded[pluginId]?.onUpdate?.());
     } catch (e) {
       log([`plugin ${pluginId} errored during update notification`, e], "error");
     }
-    
+
     log(`Updated ${pluginId} from ${oldVersion} to ${checked.manifest.version}`);
     return true;
   }
-  
+
   return false;
 }
 
@@ -350,9 +356,9 @@ export async function updatePlugin(pluginId: string) {
 export function updatePluginSettings(pluginId: string, settings: Record<string, any>) {
   const plugin = internalLoaded[pluginId];
   if (!plugin) return;
-  
+
   try {
-    Promise.resolve(plugin.onSettingsChange?.(settings)).catch(e => {
+    Promise.resolve(plugin.onSettingsChange?.(settings)).catch((e) => {
       log([`plugin ${pluginId} errored during settings change`, e], "error");
     });
   } catch (e) {
