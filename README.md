@@ -1,4 +1,4 @@
-![Shield](https://github.com/uwu/shelter/raw/main/packages/shelter-assets/svg/banner.svg)
+
 
 _a worse attempt to prepare for the worst_
 
