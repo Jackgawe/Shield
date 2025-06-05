@@ -239,20 +239,24 @@ export const devmodePrivateApis = {
 };
 
 // Update loader plugin initialization
-export async function ensureLoaderPlugin(): Promise<void> {
-  const id = "shelter-loader";
-  const existing = untrack(() => getPluginData(id));
+export async function ensureLoaderPlugin(
+  id?: string,
+  plugin?: string | [string, LoaderIntegrationOpts],
+): Promise<void> {
+  const pluginId = id ?? "shelter-loader";
+  const existing = untrack(() => getPluginData(pluginId));
 
   if (existing?.local) return;
 
-  const [store] = await createStorage<unknown>(id);
-  const plugin: StoredPlugin = {
+  const [store] = await createStorage<unknown>(pluginId);
+  const [src, opts] = plugin ? (Array.isArray(plugin) ? plugin : [plugin, undefined]) : ["", undefined];
+  const pluginData: StoredPlugin = {
     name: "Shelter Loader",
     version: "1.0.0",
     author: "uwu.network",
     description: "The plugin that loads other plugins",
     local: true,
-    src: "",
+    src,
     manifest: {
       name: "Shelter Loader",
       version: "1.0.0",
@@ -262,14 +266,15 @@ export async function ensureLoaderPlugin(): Promise<void> {
     js: "",
     on: true,
     store,
+    injectorIntegration: opts,
   };
 
-  updatePluginData(id, plugin);
+  updatePluginData(pluginId, pluginData);
 
   try {
-    await startPlugin(id);
+    await startPlugin(pluginId);
   } catch (e) {
-    delete internalData[id];
+    delete internalData[pluginId];
     throw e;
   }
 }

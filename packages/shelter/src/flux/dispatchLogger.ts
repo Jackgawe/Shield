@@ -1,8 +1,10 @@
 import { blockedSym, getDispatcher, modifiedSym } from ".";
 import { log } from "../util";
 import { dbStore, defaults } from "../storage";
+import { ShelterStore } from "../plugins";
 
-defaults(dbStore, { logDispatch: false });
+const typedDbStore = dbStore as ShelterStore<{ logDispatch: boolean }>;
+defaults(typedDbStore, { logDispatch: false });
 
 export const initDispatchLogger = async () => {
   const dispatcher = await getDispatcher();
@@ -16,7 +18,7 @@ export const initDispatchLogger = async () => {
     set: (val) => (backing = val),
     get: () =>
       function (...args) {
-        if (!dbStore.logDispatch) return backing.apply(this, args);
+        if (!typedDbStore.logDispatch) return backing.apply(this, args);
 
         let origDispatch;
         try {

@@ -108,7 +108,7 @@ async function refetchDevPlugin() {
   if (typeof fetched.js !== "string" || typeof fetched.manifest !== "object")
     throw new Error("object received from lune was not valid");
 
-  if (loadedPlugins()[devModeReservedId]) stopPlugin(devModeReservedId);
+  if (loadedPlugins[devModeReservedId]) stopPlugin(devModeReservedId);
 
   // its probably safer to give the plugin a tick or so to sort itself out
   await new Promise((res) => setTimeout(res));

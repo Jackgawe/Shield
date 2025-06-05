@@ -9,6 +9,7 @@ import {
   getPlugin,
   getPluginData,
   updatePluginData,
+  ShelterStore,
 } from "./plugins";
 
 // unusually, there is no `shelter.data` as otherwise freely reading and writing shelter's storages without user consent would be possible, which isn't great.
