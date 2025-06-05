@@ -32,6 +32,8 @@ const symWait = Symbol();
 const symDb = Symbol();
 const symSig = Symbol();
 
+export { symWait, symDb, symSig };
+
 export interface ShelterStore<T> {
   [_: string]: T;
 
@@ -68,58 +70,47 @@ const ENCRYPTION_KEY = "shield-storage-key"; // In production, this should be se
 async function encryptData(data: any): Promise<string> {
   const encoder = new TextEncoder();
   const dataBuffer = encoder.encode(JSON.stringify(data));
-  
+
   // Generate a random IV
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  
+
   // Import the key
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(ENCRYPTION_KEY),
-    { name: "AES-GCM" },
-    false,
-    ["encrypt"]
-  );
-  
+  const key = await crypto.subtle.importKey("raw", encoder.encode(ENCRYPTION_KEY), { name: "AES-GCM" }, false, [
+    "encrypt",
+  ]);
+
   // Encrypt the data
-  const encryptedBuffer = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
-    key,
-    dataBuffer
-  );
-  
+  const encryptedBuffer = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, dataBuffer);
+
   // Combine IV and encrypted data
   const result = new Uint8Array(iv.length + encryptedBuffer.byteLength);
   result.set(iv);
   result.set(new Uint8Array(encryptedBuffer), iv.length);
-  
+
   return btoa(String.fromCharCode(...result));
 }
 
 async function decryptData(encrypted: string): Promise<any> {
+  const str = atob(encrypted);
+  const data = new Uint8Array(str.length);
+  for (let i = 0; i < str.length; ++i) data[i] = str.charCodeAt(i);
   const decoder = new TextDecoder();
-  const data = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0));
-  
+  const encoder = new TextEncoder();
+
   // Extract IV and encrypted data
   const iv = data.slice(0, 12);
-  const encryptedBuffer = data.slice(12);
-  
+  const encryptedSlice = data.slice(12);
+  const encryptedBuffer = new Uint8Array(encryptedSlice.length);
+  for (let i = 0; i < encryptedSlice.length; ++i) encryptedBuffer[i] = encryptedSlice[i];
+
   // Import the key
-  const key = await crypto.subtle.importKey(
-    "raw",
-    decoder.encode(ENCRYPTION_KEY),
-    { name: "AES-GCM" },
-    false,
-    ["decrypt"]
-  );
-  
+  const key = await crypto.subtle.importKey("raw", encoder.encode(ENCRYPTION_KEY), { name: "AES-GCM" }, false, [
+    "decrypt",
+  ]);
+
   // Decrypt the data
-  const decryptedBuffer = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv },
-    key,
-    encryptedBuffer
-  );
-  
+  const decryptedBuffer = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encryptedBuffer);
+
   return JSON.parse(decoder.decode(decryptedBuffer));
 }
 
@@ -136,7 +127,7 @@ type StorageSchema = {
 function validateData(data: any, schema: StorageSchema): boolean {
   if (schema.required && data === undefined) return false;
   if (data === undefined) return true;
-  
+
   switch (schema.type) {
     case "string":
       if (typeof data !== "string") return false;
@@ -164,7 +155,7 @@ function validateData(data: any, schema: StorageSchema): boolean {
       }
       break;
   }
-  
+
   if (schema.validate && !schema.validate(data)) return false;
   return true;
 }
@@ -179,21 +170,18 @@ type StorageOptions = {
 };
 
 // Enhance storage function
-export function storage<T extends Record<string, any>>(
-  name: string,
-  options: StorageOptions = {}
-): T {
+export function storage<T extends Record<string, any>>(name: string, options: StorageOptions = {}): T {
   const {
     encrypt = true,
     schema,
     maxSize = 5 * 1024 * 1024, // 5MB default
     compression = false,
-    ttl
+    ttl,
   } = options;
-  
+
   let data: T | undefined;
   let lastModified = 0;
-  
+
   // Initialize storage
   async function init() {
     try {
@@ -202,27 +190,27 @@ export function storage<T extends Record<string, any>>(
         data = {} as T;
         return;
       }
-      
+
       let parsed: T;
       if (encrypt) {
         parsed = await decryptData(stored);
       } else {
         parsed = JSON.parse(stored);
       }
-      
+
       // Check TTL
       if (ttl && lastModified && Date.now() - lastModified > ttl) {
         data = {} as T;
         return;
       }
-      
+
       // Validate schema
       if (schema && !validateData(parsed, schema)) {
         console.warn(`Storage ${name} failed schema validation, resetting to default`);
         data = {} as T;
         return;
       }
-      
+
       data = parsed;
       lastModified = Date.now();
     } catch (e) {
@@ -230,14 +218,14 @@ export function storage<T extends Record<string, any>>(
       data = {} as T;
     }
   }
-  
+
   // Save data with compression and encryption
   async function save() {
     if (!data) return;
-    
+
     try {
       let toStore = JSON.stringify(data);
-      
+
       // Apply compression if enabled
       if (compression) {
         const encoder = new TextEncoder();
@@ -245,29 +233,29 @@ export function storage<T extends Record<string, any>>(
         const compressedBuffer = await compressData(dataBuffer);
         toStore = btoa(String.fromCharCode(...new Uint8Array(compressedBuffer)));
       }
-      
+
       // Apply encryption if enabled
       if (encrypt) {
         toStore = await encryptData(toStore);
       }
-      
+
       // Check size limit
       if (toStore.length > maxSize) {
         throw new Error(`Storage ${name} exceeds maximum size of ${maxSize} bytes`);
       }
-      
+
       localStorage.setItem(name, toStore);
       lastModified = Date.now();
     } catch (e) {
       console.error(`Failed to save storage ${name}:`, e);
     }
   }
-  
+
   // Initialize storage
   init();
-  
+
   // Create proxy for automatic saving
-  return new Proxy(data as T, {
+  const proxy = new Proxy(data as T, {
     get(target, prop) {
       return target[prop as keyof T];
     },
@@ -280,8 +268,17 @@ export function storage<T extends Record<string, any>>(
       delete target[prop as keyof T];
       save();
       return true;
-    }
+    },
   });
+
+  // Attach required symbol properties for ShelterStore compatibility
+  (proxy as any)[symWait] = (cb: () => void) => {
+    /* no-op for now */
+  };
+  (proxy as any)[symDb] = undefined;
+  (proxy as any)[symSig] = () => ({ ...proxy });
+
+  return proxy;
 }
 
 // Add compression support
@@ -289,26 +286,28 @@ async function compressData(data: Uint8Array): Promise<ArrayBuffer> {
   const cs = new CompressionStream("deflate");
   const writer = cs.writable.getWriter();
   const reader = cs.readable.getReader();
-  
-  await writer.write(data);
+
+  // Create a new Uint8Array to ensure we have a standard ArrayBuffer
+  const standardData = new Uint8Array(data);
+  await writer.write(standardData);
   await writer.close();
-  
+
   const chunks: Uint8Array[] = [];
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     chunks.push(value);
   }
-  
+
   const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
   const result = new Uint8Array(totalLength);
-  
+
   let offset = 0;
   for (const chunk of chunks) {
     result.set(chunk, offset);
     offset += chunk.length;
   }
-  
+
   return result.buffer;
 }
 
@@ -316,11 +315,11 @@ async function compressData(data: Uint8Array): Promise<ArrayBuffer> {
 export async function migrateStorage<T extends Record<string, any>>(
   oldName: string,
   newName: string,
-  migrator: (data: any) => T
+  migrator: (data: any) => T,
 ): Promise<void> {
   const oldData = localStorage.getItem(oldName);
   if (!oldData) return;
-  
+
   try {
     const parsed = JSON.parse(oldData);
     const migrated = migrator(parsed);
@@ -335,15 +334,15 @@ export async function migrateStorage<T extends Record<string, any>>(
 export async function backupStorage(name: string): Promise<string> {
   const data = localStorage.getItem(name);
   if (!data) return "";
-  
+
   try {
     const backup = {
       name,
       data,
       timestamp: Date.now(),
-      version: "1.0"
+      version: "1.0",
     };
-    
+
     return btoa(JSON.stringify(backup));
   } catch (e) {
     console.error(`Failed to backup storage ${name}:`, e);
@@ -354,17 +353,17 @@ export async function backupStorage(name: string): Promise<string> {
 export async function restoreStorage(backup: string): Promise<boolean> {
   try {
     const { name, data, timestamp, version } = JSON.parse(atob(backup));
-    
+
     // Validate backup
     if (!name || !data || !timestamp || !version) {
       throw new Error("Invalid backup format");
     }
-    
+
     // Check version compatibility
     if (version !== "1.0") {
       throw new Error(`Unsupported backup version: ${version}`);
     }
-    
+
     localStorage.setItem(name, data);
     return true;
   } catch (e) {

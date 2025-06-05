@@ -114,16 +114,16 @@ const MAX_REQUESTS_PER_WINDOW = 100;
 function checkRateLimit(url: string): boolean {
   const now = Date.now();
   const limit = rateLimits.get(url) || { count: 0, resetTime: now + RATE_LIMIT_WINDOW };
-  
+
   if (now > limit.resetTime) {
     limit.count = 0;
     limit.resetTime = now + RATE_LIMIT_WINDOW;
   }
-  
+
   if (limit.count >= MAX_REQUESTS_PER_WINDOW) {
     return false;
   }
-  
+
   limit.count++;
   rateLimits.set(url, limit);
   return true;
@@ -144,7 +144,7 @@ async function getCachedResponse(url: string): Promise<any | null> {
 function setCachedResponse(url: string, data: any): void {
   cache.set(url, {
     data,
-    expiry: Date.now() + CACHE_DURATION
+    expiry: Date.now() + CACHE_DURATION,
   });
 }
 
@@ -155,36 +155,37 @@ async function queueRequest<T>(url: string, requestFn: () => Promise<T>): Promis
   if (requestQueue.has(url)) {
     return requestQueue.get(url) as Promise<T>;
   }
-  
+
   const request = requestFn().finally(() => {
     requestQueue.delete(url);
   });
-  
+
   requestQueue.set(url, request);
   return request;
 }
 
 // Add security headers
 const SECURITY_HEADERS = {
-  "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';",
+  "Content-Security-Policy":
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';",
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
   "X-XSS-Protection": "1; mode=block",
-  "Referrer-Policy": "strict-origin-when-cross-origin"
+  "Referrer-Policy": "strict-origin-when-cross-origin",
 };
 
 // Add request validation
 function validateRequest(url: string, options?: RequestInit): string[] {
   const errors: string[] = [];
-  
+
   try {
     const parsedUrl = new URL(url);
-    
+
     // Validate URL
     if (!parsedUrl.protocol.startsWith("http")) {
       errors.push("Only HTTP(S) URLs are allowed");
     }
-    
+
     // Validate headers
     if (options?.headers) {
       const headers = new Headers(options.headers);
@@ -194,16 +195,15 @@ function validateRequest(url: string, options?: RequestInit): string[] {
         }
       }
     }
-    
+
     // Validate method
     if (options?.method && !["GET", "POST", "PUT", "DELETE", "PATCH"].includes(options.method.toUpperCase())) {
       errors.push("Invalid HTTP method");
     }
-    
   } catch (e) {
     errors.push("Invalid URL");
   }
-  
+
   return errors;
 }
 
@@ -214,18 +214,18 @@ export async function safeFetch<T>(url: string, options?: RequestInit): Promise<
   if (errors.length > 0) {
     throw new Error(`Request validation failed: ${errors.join(", ")}`);
   }
-  
+
   // Check rate limit
   if (!checkRateLimit(url)) {
     throw new Error("Rate limit exceeded");
   }
-  
+
   // Check cache for GET requests
   if (!options?.method || options.method.toUpperCase() === "GET") {
     const cached = await getCachedResponse(url);
     if (cached) return cached;
   }
-  
+
   // Queue request
   return queueRequest(url, async () => {
     try {
@@ -234,23 +234,23 @@ export async function safeFetch<T>(url: string, options?: RequestInit): Promise<
       for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
         headers.set(key, value);
       }
-      
+
       const response = await fetch(url, {
         ...options,
-        headers
+        headers,
       });
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
       }
-      
+
       const data = await response.json();
-      
+
       // Cache successful GET responses
       if (!options?.method || options.method.toUpperCase() === "GET") {
         setCachedResponse(url, data);
       }
-      
+
       return data;
     } catch (e) {
       console.error(`Request failed for ${url}:`, e);
@@ -279,38 +279,35 @@ async function retryRequest<T>(
   url: string,
   options: RequestInit,
   maxRetries: number = 3,
-  delay: number = 1000
+  delay: number = 1000,
 ): Promise<T> {
   let lastError: Error | null = null;
-  
+
   for (let i = 0; i < maxRetries; i++) {
     try {
       return await safeFetch<T>(url, options);
     } catch (e) {
       lastError = e as Error;
       if (i < maxRetries - 1) {
-        await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i)));
+        await new Promise((resolve) => setTimeout(resolve, delay * Math.pow(2, i)));
       }
     }
   }
-  
+
   throw lastError;
 }
 
 // Add request timeout
-export async function fetchWithTimeout<T>(
-  url: string,
-  options: RequestInit & { timeout?: number } = {}
-): Promise<T> {
+export async function fetchWithTimeout<T>(url: string, options: RequestInit & { timeout?: number } = {}): Promise<T> {
   const { timeout = 5000, ...fetchOptions } = options;
-  
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
+
   try {
     return await safeFetch<T>(url, {
       ...fetchOptions,
-      signal: controller.signal
+      signal: controller.signal,
     });
   } finally {
     clearTimeout(timeoutId);
@@ -320,19 +317,19 @@ export async function fetchWithTimeout<T>(
 // Add request cancellation
 export class RequestCanceller {
   private controller: AbortController;
-  
+
   constructor() {
     this.controller = new AbortController();
   }
-  
+
   get signal(): AbortSignal {
     return this.controller.signal;
   }
-  
+
   cancel(): void {
     this.controller.abort();
   }
-  
+
   reset(): void {
     this.controller = new AbortController();
   }
@@ -343,41 +340,41 @@ export async function fetchWithProgress<T>(
   url: string,
   options: RequestInit & {
     onProgress?: (progress: number) => void;
-  } = {}
+  } = {},
 ): Promise<T> {
   const { onProgress, ...fetchOptions } = options;
-  
+
   const response = await fetch(url, fetchOptions);
   const reader = response.body?.getReader();
   const contentLength = Number(response.headers.get("Content-Length")) || 0;
-  
+
   if (!reader || !contentLength) {
     return response.json();
   }
-  
+
   let receivedLength = 0;
   const chunks: Uint8Array[] = [];
-  
+
   while (true) {
     const { done, value } = await reader.read();
-    
+
     if (done) break;
-    
+
     chunks.push(value);
     receivedLength += value.length;
-    
+
     if (onProgress) {
       onProgress(receivedLength / contentLength);
     }
   }
-  
+
   const chunksAll = new Uint8Array(receivedLength);
   let position = 0;
-  
+
   for (const chunk of chunks) {
     chunksAll.set(chunk, position);
     position += chunk.length;
   }
-  
+
   return JSON.parse(new TextDecoder().decode(chunksAll));
 }

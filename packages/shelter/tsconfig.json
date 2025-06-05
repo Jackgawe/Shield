@@ -2,13 +2,19 @@
   "include": ["src/**/*.ts", "src/**/*.tsx", "../../globals.d.ts"],
   "compilerOptions": {
     "target": "ESNext",
-    "moduleResolution": "node",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "jsx": "preserve",
     "jsxImportSource": "solid-js",
     "noEmit": true,
     "skipDefaultLibCheck": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "composite": true
-  }
+    "composite": true,
+    "strict": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "types": ["node", "solid-js", "@uwu/shelter-ui"]
+  },
+  "references": [{ "path": "../shelter-ui" }, { "path": "../shelter-defs" }]
 }

@@ -73,6 +73,7 @@ const PluginEditModal = (props: {
           name: "",
           author: "",
           description: "",
+          version: "1.0.0",
         },
       };
 

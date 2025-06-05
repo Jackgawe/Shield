@@ -25,4 +25,4 @@
     "no-console": ["warn", { "allow": ["warn", "error"] }]
   },
   "ignorePatterns": ["dist", "build", "node_modules", "*.js", "*.cjs"]
-} 
+}
