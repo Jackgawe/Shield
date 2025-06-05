@@ -2,13 +2,8 @@
 
 _a worse attempt to prepare for the worst_
 
-[![wakatime](https://wakatime.com/badge/github/Jackgawe/Shield.svg)](https://wakatime.com/badge/github/Jackgawe/Shield)
-
 Shield is a new generation client mod built to be essentially bulletproof.
 
-It is developed by ex-members of the old Cumcord Team, under [uwu.network](https://uwu.network/).
-
-See the website at https://shelter.uwu.network for further information.
 
 We are constantly working to improve shelter and its ecosystem.
 Keep an eye on the uwu gh org or [our Discord server](https://discord.gg/FhHQQrVs7U)
