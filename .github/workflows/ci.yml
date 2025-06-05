@@ -102,7 +102,7 @@ jobs:
           npm i -g pnpm
           pnpm i
       - name: Check formatting
-        run: pnpm format:check
+        run: pnpm dprint check
 
   typecheck:
     runs-on: ubuntu-latest
@@ -116,6 +116,7 @@ jobs:
           npm i -g pnpm
           pnpm i
       - name: Type check
+        working-directory: packages/shelter
         run: pnpm tsc --noEmit
 
   test:
