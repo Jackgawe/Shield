@@ -73,24 +73,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Deploy Documentation
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          pnpm --filter shelter-docs run build
-          cd packages/shelter-docs
-          touch .nojekyll
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Deploy to GitHub Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./packages/shelter-docs/dist
-          publish_branch: gh-pages
-          commit_message: "docs: update documentation"
-
   format:
     runs-on: ubuntu-latest
     steps:
