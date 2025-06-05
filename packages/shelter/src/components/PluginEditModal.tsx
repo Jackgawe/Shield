@@ -61,9 +61,9 @@ const PluginEditModal = (props: {
 }) => {
   onCleanup(() => props.resolve(false));
 
-  const stateInit: StoredPlugin = props.editId
-    ? untrack(installedPlugins)[props.editId]
-    : {
+  const stateInit = props.editId
+    ? getPlugin(props.editId)
+    : ({
         local: false,
         on: false,
         js: "",
@@ -75,7 +75,12 @@ const PluginEditModal = (props: {
           description: "",
           version: "1.0.0",
         },
-      };
+        store: {} as ShelterStore<unknown>,
+        name: "",
+        description: "",
+        version: "1.0.0",
+        author: "",
+      } as StoredPlugin);
 
   if (!stateInit) {
     props.reject("Cannot edit a plugin that is not installed");
@@ -83,10 +88,8 @@ const PluginEditModal = (props: {
   }
 
   const [local, setLocal] = createSignal(stateInit.local);
-
   const [rSrc, setRSrc] = createSignal(stateInit.src);
   const [rUpdate, setRUpdate] = createSignal(stateInit.update);
-
   const [lName, setLName] = createSignal(stateInit.manifest?.name ?? "");
   const [lCode, setLCode] = createSignal(stateInit.js ?? "");
   const [lAuthor, setLAuthor] = createSignal(stateInit.manifest?.author ?? "");
@@ -191,7 +194,7 @@ const PluginEditModal = (props: {
               }
 
               // edit existing plugin
-              editPlugin(props.editId, {
+              const updatedPlugin: Partial<StoredPlugin> = {
                 local: local(),
                 js: lCode(),
                 update: rUpdate(),
@@ -201,10 +204,13 @@ const PluginEditModal = (props: {
                   name: lName(),
                   author: lAuthor(),
                   description: lDesc(),
+                  version: stateInit.manifest.version,
                 },
                 on: stateInit.on,
                 src: rSrc(),
-              });
+              };
+
+              updatePluginData(props.editId, updatedPlugin);
 
               // update if necessary
               if (!local()) await updatePlugin(props.editId);
@@ -212,7 +218,7 @@ const PluginEditModal = (props: {
               if (!local() && wasRunning) startPlugin(props.editId);
             } else if (local()) {
               // create new local plugin
-              addLocalPlugin(targetId(), {
+              const newPlugin: StoredPlugin = {
                 local: true,
                 js: lCode(),
                 update: rUpdate(),
@@ -220,13 +226,21 @@ const PluginEditModal = (props: {
                   name: lName(),
                   author: lAuthor(),
                   description: lDesc(),
+                  version: "1.0.0",
                 },
-                on: stateInit.on,
+                on: false,
                 src: rSrc(),
-              });
+                store: {} as ShelterStore<unknown>,
+                name: lName(),
+                description: lDesc(),
+                version: "1.0.0",
+                author: lAuthor(),
+              };
+
+              addLocalPlugin(targetId(), newPlugin);
             } else {
               // create new remote plugin
-              await addRemotePlugin(targetId(), rSrc(), rUpdate());
+              await addRemotePlugin(targetId(), rSrc());
             }
           } catch (e) {
             return props.reject(e);

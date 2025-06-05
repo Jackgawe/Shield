@@ -6,8 +6,9 @@ import {
   startPlugin,
   stopPlugin,
   StoredPlugin,
-  UNSAFE_internalData as internalData,
-  UNSAFE_pluginStorages as pluginStorages,
+  getPlugin,
+  getPluginData,
+  updatePluginData,
 } from "./plugins";
 
 // unusually, there is no `shelter.data` as otherwise freely reading and writing shelter's storages without user consent would be possible, which isn't great.
@@ -31,14 +32,16 @@ export function exportData(pluginsToExport: Record<string, boolean>) {
     remotePlugins: {},
   };
 
-  for (const id in internalData) {
+  const plugins = installedPlugins();
+  for (const id in plugins) {
     if (!(id in pluginsToExport)) continue;
 
-    const plugin = internalData[id];
+    const plugin = getPlugin(id);
+    if (!plugin) continue;
 
     if ("injectorIntegration" in plugin) continue;
 
-    const pluginData = pluginsToExport[id] ? { ...pluginStorages[id] } : undefined;
+    const pluginData = pluginsToExport[id] ? { ...plugin.store } : undefined;
 
     if (plugin.local) {
       exp.localPlugins[id] = [
@@ -73,17 +76,32 @@ export function importData(dataToImport: DataExport) {
   for (const localId in dataToImport.localPlugins) {
     const newLocal = dataToImport.localPlugins[localId];
 
-    if (localId in loadedPlugins()) stopPlugin(localId);
+    if (localId in loadedPlugins) stopPlugin(localId);
 
-    if (newLocal.length > 1) pluginStorages[localId] = newLocal[1];
-
-    internalData[localId] = {
-      ...(internalData[localId] || { update: false }),
+    const existingPlugin = getPluginData(localId);
+    const updatedPlugin: Partial<StoredPlugin> = {
       local: true,
       on: false,
       js: newLocal[0].js ?? "",
       manifest: newLocal[0].manifest ?? {},
+      store: existingPlugin?.store ?? ({} as ShelterStore<unknown>),
     };
+
+    if (newLocal.length > 1) {
+      updatedPlugin.store = newLocal[1] as ShelterStore<unknown>;
+    }
+
+    if (existingPlugin) {
+      updatePluginData(localId, updatedPlugin);
+    } else {
+      updatePluginData(localId, {
+        ...updatedPlugin,
+        name: newLocal[0].manifest.name,
+        description: newLocal[0].manifest.description,
+        version: newLocal[0].manifest.version,
+        author: newLocal[0].manifest.author,
+      } as StoredPlugin);
+    }
 
     if (newLocal[0].on) startPlugin(localId);
   }
@@ -93,29 +111,48 @@ export function importData(dataToImport: DataExport) {
     const newRemote = dataToImport.remotePlugins[remoteSrc];
 
     // find the plugin id of the one to merge with, and remove copies of plugins with the same src
-    let idToApplyTo: string;
+    let idToApplyTo: string | undefined;
 
-    for (const id in installedPlugins())
-      if (internalData[id].src === remoteSrc) {
+    const plugins = installedPlugins();
+    for (const id in plugins) {
+      const plugin = getPlugin(id);
+      if (plugin?.src === remoteSrc) {
         if (!idToApplyTo) idToApplyTo = id;
         else removePlugin(id);
       }
+    }
 
     idToApplyTo ??= remoteSrc.split("://").at(-1);
+    if (!idToApplyTo) continue;
 
-    if (idToApplyTo in loadedPlugins()) stopPlugin(idToApplyTo);
+    if (idToApplyTo in loadedPlugins) stopPlugin(idToApplyTo);
 
-    if (newRemote.length > 1) pluginStorages[idToApplyTo] = newRemote[1];
-
-    internalData[idToApplyTo] = {
-      ...(internalData[idToApplyTo] || {}),
+    const existingPlugin = getPluginData(idToApplyTo);
+    const updatedPlugin: Partial<StoredPlugin> = {
       local: false,
       on: false,
       update: newRemote[0].update ?? true,
       src: remoteSrc,
       js: newRemote[0].js ?? "",
       manifest: newRemote[0].manifest ?? {},
+      store: existingPlugin?.store ?? ({} as ShelterStore<unknown>),
     };
+
+    if (newRemote.length > 1) {
+      updatedPlugin.store = newRemote[1] as ShelterStore<unknown>;
+    }
+
+    if (existingPlugin) {
+      updatePluginData(idToApplyTo, updatedPlugin);
+    } else {
+      updatePluginData(idToApplyTo, {
+        ...updatedPlugin,
+        name: newRemote[0].manifest.name,
+        description: newRemote[0].manifest.description,
+        version: newRemote[0].manifest.version,
+        author: newRemote[0].manifest.author,
+      } as StoredPlugin);
+    }
 
     if (newRemote[0].on) startPlugin(idToApplyTo);
   }
