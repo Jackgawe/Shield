@@ -13,6 +13,11 @@ import {
   showToast,
   IconUpload,
   ModalSizes,
+  Button,
+  ButtonColors,
+  ButtonSizes,
+  ModalFooter,
+  TextInput,
 } from "@uwu/shelter-ui";
 import { Component, createMemo, createSignal, Match, onCleanup, Show, Switch, untrack } from "solid-js";
 import {
@@ -24,7 +29,11 @@ import {
   stopPlugin,
   StoredPlugin,
   updatePlugin,
+  getPlugin,
+  updatePluginData,
+  ShelterStore,
 } from "../plugins";
+import { createStorage } from "../storage";
 import { classes } from "./Plugins.tsx.scss";
 
 const JsUploader: Component<{ setCode: (t: string) => void }> = (props) => {

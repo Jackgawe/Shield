@@ -20,8 +20,8 @@ export type DataExport = {
   dbStore: Record<string, any>;
   // local plugins of form { id: [ plugin obj, plugin data? ] }
   // remote plugins of the form { src: [ plugin obj, plugin data? ] }
-  localPlugins: Record<string, [ExportedLocalPlugin] | [ExportedLocalPlugin, object]>;
-  remotePlugins: Record<string, [ExportedRemotePlugin] | [ExportedRemotePlugin, object]>;
+  localPlugins: Record<string, [ExportedLocalPlugin] | [ExportedLocalPlugin, Record<string, any>]>;
+  remotePlugins: Record<string, [ExportedRemotePlugin] | [ExportedRemotePlugin, Record<string, any>]>;
 };
 
 // pluginsToExport is of the form { id: should export data too }
@@ -44,24 +44,20 @@ export function exportData(pluginsToExport: Record<string, boolean>) {
     const pluginData = pluginsToExport[id] ? { ...plugin.store } : undefined;
 
     if (plugin.local) {
-      exp.localPlugins[id] = [
-        {
-          on: plugin.on,
-          js: plugin.js,
-          manifest: plugin.manifest,
-        },
-      ];
-      if (pluginData) exp.localPlugins[id].push(pluginData);
+      const exportedPlugin: ExportedLocalPlugin = {
+        on: plugin.on,
+        js: plugin.js,
+        manifest: plugin.manifest,
+      };
+      exp.localPlugins[id] = pluginData ? [exportedPlugin, pluginData] : [exportedPlugin];
     } else {
-      exp.remotePlugins[plugin.src] = [
-        {
-          update: plugin.update,
-          on: plugin.on,
-          js: plugin.js,
-          manifest: plugin.manifest,
-        },
-      ];
-      if (pluginData) exp.remotePlugins[plugin.src].push(pluginData);
+      const exportedPlugin: ExportedRemotePlugin = {
+        update: plugin.update,
+        on: plugin.on,
+        js: plugin.js,
+        manifest: plugin.manifest,
+      };
+      exp.remotePlugins[plugin.src] = pluginData ? [exportedPlugin, pluginData] : [exportedPlugin];
     }
   }
 
@@ -75,6 +71,7 @@ export function importData(dataToImport: DataExport) {
   // if the id exists, stop it, overwrite data if present, merge the objects, and if relevant, start it.
   for (const localId in dataToImport.localPlugins) {
     const newLocal = dataToImport.localPlugins[localId];
+    const [pluginData, storeData] = newLocal;
 
     if (localId in loadedPlugins) stopPlugin(localId);
 
@@ -82,13 +79,18 @@ export function importData(dataToImport: DataExport) {
     const updatedPlugin: Partial<StoredPlugin> = {
       local: true,
       on: false,
-      js: newLocal[0].js ?? "",
-      manifest: newLocal[0].manifest ?? {},
+      js: pluginData.js ?? "",
+      manifest: pluginData.manifest ?? {
+        name: "",
+        description: "",
+        version: "1.0.0",
+        author: "",
+      },
       store: existingPlugin?.store ?? ({} as ShelterStore<unknown>),
     };
 
-    if (newLocal.length > 1) {
-      updatedPlugin.store = newLocal[1] as ShelterStore<unknown>;
+    if (storeData) {
+      updatedPlugin.store = storeData as ShelterStore<unknown>;
     }
 
     if (existingPlugin) {
@@ -96,19 +98,20 @@ export function importData(dataToImport: DataExport) {
     } else {
       updatePluginData(localId, {
         ...updatedPlugin,
-        name: newLocal[0].manifest.name,
-        description: newLocal[0].manifest.description,
-        version: newLocal[0].manifest.version,
-        author: newLocal[0].manifest.author,
+        name: pluginData.manifest.name,
+        description: pluginData.manifest.description,
+        version: pluginData.manifest.version,
+        author: pluginData.manifest.author,
       } as StoredPlugin);
     }
 
-    if (newLocal[0].on) startPlugin(localId);
+    if (pluginData.on) startPlugin(localId);
   }
 
   // now do remote plugins
   for (const remoteSrc in dataToImport.remotePlugins) {
     const newRemote = dataToImport.remotePlugins[remoteSrc];
+    const [pluginData, storeData] = newRemote;
 
     // find the plugin id of the one to merge with, and remove copies of plugins with the same src
     let idToApplyTo: string | undefined;
@@ -131,15 +134,20 @@ export function importData(dataToImport: DataExport) {
     const updatedPlugin: Partial<StoredPlugin> = {
       local: false,
       on: false,
-      update: newRemote[0].update ?? true,
+      update: pluginData.update ?? true,
       src: remoteSrc,
-      js: newRemote[0].js ?? "",
-      manifest: newRemote[0].manifest ?? {},
+      js: pluginData.js ?? "",
+      manifest: pluginData.manifest ?? {
+        name: "",
+        description: "",
+        version: "1.0.0",
+        author: "",
+      },
       store: existingPlugin?.store ?? ({} as ShelterStore<unknown>),
     };
 
-    if (newRemote.length > 1) {
-      updatedPlugin.store = newRemote[1] as ShelterStore<unknown>;
+    if (storeData) {
+      updatedPlugin.store = storeData as ShelterStore<unknown>;
     }
 
     if (existingPlugin) {
@@ -147,14 +155,14 @@ export function importData(dataToImport: DataExport) {
     } else {
       updatePluginData(idToApplyTo, {
         ...updatedPlugin,
-        name: newRemote[0].manifest.name,
-        description: newRemote[0].manifest.description,
-        version: newRemote[0].manifest.version,
-        author: newRemote[0].manifest.author,
+        name: pluginData.manifest.name,
+        description: pluginData.manifest.description,
+        version: pluginData.manifest.version,
+        author: pluginData.manifest.author,
       } as StoredPlugin);
     }
 
-    if (newRemote[0].on) startPlugin(idToApplyTo);
+    if (pluginData.on) startPlugin(idToApplyTo);
   }
 }
 
