@@ -5,7 +5,7 @@
   "description": "A modern, robust Discord client modification framework",
   "scripts": {
     "postinstall": "husky install",
-    "format": "dprint fmt",
+    "format": "node -e \"process.argv.includes('--check') ? require('child_process').execSync('dprint check', {stdio: 'inherit'}) : require('child_process').execSync('dprint fmt', {stdio: 'inherit'})\"",
     "format:check": "dprint check",
     "dev": "pnpm -r dev",
     "build": "pnpm -r build",
