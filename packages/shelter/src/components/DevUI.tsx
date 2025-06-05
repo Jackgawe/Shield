@@ -7,7 +7,10 @@ import { createMemo, Show } from "solid-js";
 
 // fullVersion shows the header and the toggle for always showing the mini menu
 export default (props: { fullVersion?: boolean }) => {
-  const devModeOn = createMemo(() => devModeReservedId in installedPlugins());
+  const devModeOn = createMemo(() => {
+    const plugins = installedPlugins();
+    return devModeReservedId in plugins;
+  });
 
   return (
     <>
@@ -30,7 +33,7 @@ export default (props: { fullVersion?: boolean }) => {
             : stopDevmode()
         }
         note={
-          devModeReservedId in installedPlugins() ? (
+          devModeOn() ? (
             <>
               shelter is currently tethered to
               <Space />

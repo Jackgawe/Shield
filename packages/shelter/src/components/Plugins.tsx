@@ -184,11 +184,12 @@ export default (): JSX.Element => {
 
   const [searchTerm, setSearchTerm] = createSignal("");
 
-  const visiblePlugins = createMemo(() =>
-    fuzzy(Object.entries(installedPlugins()), searchTerm()).filter(
+  const visiblePlugins = createMemo(() => {
+    const plugins = installedPlugins();
+    return fuzzy(Object.entries(plugins), searchTerm()).filter(
       ([id, obj]) => id !== devModeReservedId && (!obj.injectorIntegration || obj.injectorIntegration.isVisible),
-    ),
-  );
+    );
+  });
 
   return (
     <div class={classes.list}>
@@ -206,10 +207,6 @@ export default (): JSX.Element => {
         </Button>
       </div>
 
-      {/* IIRC not using a <For> here was very intentional due to keying -- sink
-       * the only way to do what we need cleanly in solid looks *like this*!:
-       * https://codesandbox.io/s/explicit-keys-4iyen?file=/Key.js
-       */}
       {visiblePlugins()
         .sort(([, pluginA], [, pluginB]) => {
           const nameA = pluginA.manifest.name?.toLowerCase();

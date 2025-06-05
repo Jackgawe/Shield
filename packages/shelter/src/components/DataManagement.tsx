@@ -34,7 +34,8 @@ export const ExportModal = ({ close }: { close: () => void }) => {
   const [pluginsSaveData, setPluginsSaveData] = createSignal(new Map<string, boolean>(), { equals: false });
 
   // all plugins selected by default
-  for (const id in untrack(installedPlugins)) {
+  const plugins = installedPlugins();
+  for (const id in plugins) {
     pluginsActive().add(id);
     pluginsSaveData().set(id, true);
   }
@@ -53,7 +54,7 @@ export const ExportModal = ({ close }: { close: () => void }) => {
           <div />
           {/*<strong>Include</strong>*/}
           <strong>Export Settings</strong>
-          <For each={Object.entries(installedPlugins()).filter(([, p]) => !p.injectorIntegration)}>
+          <For each={Object.entries(plugins).filter(([, p]) => !p.injectorIntegration)}>
             {([id, plugin]) => (
               <>
                 <span>{plugin.manifest.name}</span>

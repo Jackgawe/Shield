@@ -154,6 +154,10 @@ function getPluginData(id: string): StoredPlugin | undefined {
   return (internalData as unknown as Record<string, StoredPlugin>)[id];
 }
 
+// Update signal creation to use proper type and accessor
+const [getInstalledPlugins, setInstalledPlugins] = createSignal<PluginStore>(internalData as unknown as PluginStore);
+export const installedPlugins = () => getInstalledPlugins();
+
 // Update plugin management functions to use helpers
 export function addLocalPlugin(id: string, plugin: StoredPlugin) {
   if (typeof id !== "string" || untrack(() => getPluginData(id)) || id === devModeReservedId)
@@ -310,10 +314,6 @@ export async function startAllPlugins() {
 }
 
 const stopAllPlugins = () => Object.keys(internalData).forEach(stopPlugin);
-
-// Update signal creation to use proper type
-export const installedPlugins = createSignal<PluginStore>(internalData as unknown as PluginStore);
-export { loadedPlugins };
 
 // Update plugin API creation
 async function createPluginApi(pluginId: string, plugin: StoredPlugin) {
@@ -720,5 +720,6 @@ export function getPlugin(id: string): StoredPlugin {
 // Update plugin manifest access
 export function getPluginManifest(pluginId: string): PluginMetadata {
   const data = getPluginData(pluginId);
+  if (!data) throw new Error(`attempted to get manifest for non-existent plugin: ${pluginId}`);
   return data.manifest;
 }
