@@ -93,7 +93,7 @@ export type EvaledPlugin = {
 export type PluginStore = Record<string, StoredPlugin>;
 
 // Store creation function
-async function createStorage<T>(pluginId: string): Promise<[ShelterStore<T>, () => void]> {
+export async function createStorage<T>(pluginId: string): Promise<[ShelterStore<T>, () => void]> {
   if (!isInited(pluginStorages)) {
     throw new Error("to keep data persistent, plugin storages must not be created until connected to IDB");
   }
