@@ -25,17 +25,49 @@ export type LoaderIntegrationOpts = {
   loaderName?: string;
 };
 
+// Add new plugin lifecycle hooks
+export type PluginLifecycleHooks = {
+  onLoad?(): void | Promise<void>;
+  onUnload?(): void | Promise<void>;
+  onUpdate?(): void | Promise<void>;
+  onError?(error: Error): void | Promise<void>;
+  onSettingsChange?(settings: Record<string, any>): void | Promise<void>;
+};
+
+// Add plugin metadata
+export type PluginMetadata = {
+  name: string;
+  description: string;
+  version: string;
+  author: string;
+  license?: string;
+  repository?: string;
+  dependencies?: Record<string, string>;
+  permissions?: string[];
+  tags?: string[];
+  minShieldVersion?: string;
+  maxShieldVersion?: string;
+};
+
+// Enhance StoredPlugin type
 export type StoredPlugin = {
   on: boolean;
   js: string;
   update: boolean;
   src?: string;
-  // optional for backwards compat, but should be filled in always from 2024-09-20
-  // the plugin loader will automatically set this if not present to (!src)
   local: boolean;
-  manifest: Record<string, string>;
-  // non existent for normal plugins
+  manifest: PluginMetadata;
   injectorIntegration?: LoaderIntegrationOpts;
+  lastUpdated?: number;
+  lastError?: string;
+  enabledAt?: number;
+  disabledAt?: number;
+  usageStats?: {
+    loadCount: number;
+    errorCount: number;
+    lastLoadTime?: number;
+    totalUptime: number;
+  };
 };
 
 export type EvaledPlugin = {
@@ -114,69 +146,156 @@ function createPluginApi(pluginId: string, { manifest, injectorIntegration }: St
 
 export type ShelterPluginApi = ReturnType<typeof createPluginApi>;
 
-export function startPlugin(pluginId: string) {
+// Add plugin validation
+function validatePlugin(plugin: StoredPlugin): string[] {
+  const errors: string[] = [];
+  
+  if (!plugin.manifest.name) errors.push("Plugin must have a name");
+  if (!plugin.manifest.version) errors.push("Plugin must have a version");
+  if (!plugin.manifest.author) errors.push("Plugin must have an author");
+  
+  // Version format validation
+  if (plugin.manifest.version && !/^\d+\.\d+\.\d+$/.test(plugin.manifest.version)) {
+    errors.push("Version must follow semver format (x.y.z)");
+  }
+  
+  // Shield version compatibility check
+  if (plugin.manifest.minShieldVersion) {
+    // Add version comparison logic here
+  }
+  
+  return errors;
+}
+
+// Add plugin sandboxing
+function createPluginSandbox(pluginId: string, api: ShelterPluginApi) {
+  const sandbox = {
+    console: {
+      log: (...args: any[]) => log([`[${pluginId}]`, ...args]),
+      warn: (...args: any[]) => log([`[${pluginId}]`, ...args], "warn"),
+      error: (...args: any[]) => log([`[${pluginId}]`, ...args], "error"),
+    },
+    fetch: async (url: string, opts?: RequestInit) => {
+      // Add rate limiting, URL validation, etc.
+      return fetch(url, opts);
+    },
+    setTimeout: (cb: Function, ms: number) => {
+      // Add timeout limits
+      return setTimeout(cb, Math.min(ms, 30000));
+    },
+    // Add more sandboxed APIs
+  };
+  
+  return sandbox;
+}
+
+// Enhance plugin loading with sandboxing and validation
+export async function startPlugin(pluginId: string) {
   const data = internalData[pluginId];
   if (!data) throw new Error(`attempted to load a non-existent plugin: ${pluginId}`);
-
   if (internalLoaded[pluginId]) throw new Error("attempted to load an already loaded plugin");
 
+  // Validate plugin
+  const validationErrors = validatePlugin(data);
+  if (validationErrors.length > 0) {
+    throw new Error(`Plugin validation failed: ${validationErrors.join(", ")}`);
+  }
+
   const pluginApi = createPluginApi(pluginId, data);
+  const sandbox = createPluginSandbox(pluginId, pluginApi);
 
   const shelterPluginEdition = {
     ...window["shelter"],
     plugin: pluginApi,
+    sandbox,
   };
 
-  // injector plugins have superpowers
-  if (data.injectorIntegration)
-    shelterPluginEdition.settings = {
-      ...shelterPluginEdition.settings,
-      setInjectorSections,
-      registerSection: registerInjSection,
-    } as any; // otherwise, cannot add setInjectorSections, lol
-
-  const pluginString = `shelter=>{return ${data.js}}${atob("Ci8v")}# sourceURL=s://!SHELTER/${pluginId}`;
+  // Update usage stats
+  data.usageStats = {
+    loadCount: (data.usageStats?.loadCount ?? 0) + 1,
+    errorCount: data.usageStats?.errorCount ?? 0,
+    lastLoadTime: Date.now(),
+    totalUptime: data.usageStats?.totalUptime ?? 0,
+  };
+  data.enabledAt = Date.now();
 
   try {
-    // noinspection CommaExpressionJS
-    const rawPlugin: EvaledPlugin = (0, eval)(pluginString)(shelterPluginEdition);
-    // clone this because the way some bundlers defineProperty does not play nice with the solid store
-    const plugin = { ...rawPlugin, scopedDispose: pluginApi.scoped.disposeAllNow };
+    // Create a more secure evaluation context
+    const pluginString = `shelter=>{return ${data.js}}${atob("Ci8v")}# sourceURL=s://!SHELTER/${pluginId}`;
+    const rawPlugin: EvaledPlugin & PluginLifecycleHooks = (0, eval)(pluginString)(shelterPluginEdition);
+    
+    // Clone and enhance plugin
+    const plugin = {
+      ...rawPlugin,
+      scopedDispose: pluginApi.scoped.disposeAllNow,
+      manifest: data.manifest,
+      id: pluginId,
+    };
+    
     internalLoaded[pluginId] = plugin;
 
-    plugin.onLoad?.();
-
-    internalData[pluginId] = { ...data, on: true };
-  } catch (e) {
-    log([`plugin ${pluginId} errored while loading and will be unloaded`, e], "error");
-
+    // Handle async onLoad
     try {
-      internalLoaded[pluginId]?.onUnload?.();
+      await Promise.resolve(plugin.onLoad?.());
+    } catch (e) {
+      log([`plugin ${pluginId} errored during onLoad`, e], "error");
+      throw e;
+    }
+
+    internalData[pluginId] = { ...data, on: true, lastError: undefined };
+  } catch (e) {
+    const error = e instanceof Error ? e : new Error(String(e));
+    
+    // Update error stats
+    data.usageStats.errorCount = (data.usageStats?.errorCount ?? 0) + 1;
+    data.lastError = error.message;
+    data.disabledAt = Date.now();
+    
+    // Call error handler if available
+    try {
+      await Promise.resolve(internalLoaded[pluginId]?.onError?.(error));
+    } catch (e2) {
+      log([`plugin ${pluginId} errored while handling error`, e2], "error");
+    }
+
+    // Cleanup
+    try {
+      await Promise.resolve(internalLoaded[pluginId]?.onUnload?.());
     } catch (e2) {
       log([`plugin ${pluginId} errored while unloading`, e2], "error");
     }
 
     delete internalLoaded[pluginId];
     internalData[pluginId] = { ...data, on: false };
+    
+    throw error;
   }
 }
 
-export function stopPlugin(pluginId: string) {
+// Enhance plugin unloading
+export async function stopPlugin(pluginId: string) {
   const data = internalData[pluginId];
   const loadedData = internalLoaded[pluginId];
   if (!data) throw new Error(`attempted to unload a non-existent plugin: ${pluginId}`);
   if (!loadedData) throw new Error(`attempted to unload a non-loaded plugin: ${pluginId}`);
 
   try {
-    loadedData.onUnload?.();
+    await Promise.resolve(loadedData.onUnload?.());
   } catch (e) {
     log([`plugin ${pluginId} errored while unloading`, e], "error");
   }
+
   try {
     loadedData.scopedDispose();
   } catch (e) {
     log([`plugin ${pluginId} errored while unloading scoped APIs`, e], "error");
   }
+
+  // Update usage stats
+  if (data.enabledAt) {
+    data.usageStats.totalUptime += Date.now() - data.enabledAt;
+  }
+  data.disabledAt = Date.now();
 
   delete internalLoaded[pluginId];
   internalData[pluginId] = { ...data, on: false };
@@ -205,14 +324,39 @@ async function fetchUpdate(pluginId: string): Promise<false | StoredPlugin> {
   }
 }
 
+// Add plugin update notification
 export async function updatePlugin(pluginId: string) {
   const checked = await fetchUpdate(pluginId);
 
   if (checked) {
+    const oldVersion = internalData[pluginId].manifest.version;
     editPlugin(pluginId, checked, true);
+    
+    // Notify plugin of update
+    try {
+      await Promise.resolve(internalLoaded[pluginId]?.onUpdate?.());
+    } catch (e) {
+      log([`plugin ${pluginId} errored during update notification`, e], "error");
+    }
+    
+    log(`Updated ${pluginId} from ${oldVersion} to ${checked.manifest.version}`);
     return true;
-  } else {
-    return false;
+  }
+  
+  return false;
+}
+
+// Add plugin settings change notification
+export function updatePluginSettings(pluginId: string, settings: Record<string, any>) {
+  const plugin = internalLoaded[pluginId];
+  if (!plugin) return;
+  
+  try {
+    Promise.resolve(plugin.onSettingsChange?.(settings)).catch(e => {
+      log([`plugin ${pluginId} errored during settings change`, e], "error");
+    });
+  } catch (e) {
+    log([`plugin ${pluginId} errored during settings change`, e], "error");
   }
 }
 

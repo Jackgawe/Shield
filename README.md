@@ -2,7 +2,7 @@
 
 [![License: CC0-1.0](https://img.shields.io/badge/License-CC0%201.0-lightgrey.svg)](http://creativecommons.org/publicdomain/zero/1.0/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/Jackgawe/Shield/pulls)
-[![Discord](https://img.shields.io/discord/FhHQQrVs7U?label=Discord&logo=discord)](https://discord.gg/FhHQQrVs7U)
+[![Discord](https://img.shields.io/discord/M9w4fnxKjx?label=Discord&logo=discord)](https://discord.gg/M9w4fnxKjx)
 
 A modern, robust Discord client modification framework built with security and reliability in mind.
 

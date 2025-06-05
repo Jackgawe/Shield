@@ -103,6 +103,6 @@ Types:
 
 ## Questions?
 
-Feel free to ask questions in our [Discord server](https://discord.gg/FhHQQrVs7U) or open an issue.
+Feel free to ask questions in our [Discord server](https://discord.gg/M9w4fnxKjx) or open an issue.
 
 Thank you for contributing to Shield! 🚀 
