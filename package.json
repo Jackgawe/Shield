@@ -6,6 +6,7 @@
   "scripts": {
     "postinstall": "husky install",
     "format": "dprint fmt",
+    "format:check": "dprint check",
     "dev": "pnpm -r dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
