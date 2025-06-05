@@ -1,10 +1,10 @@
-![shelter](https://github.com/uwu/shelter/raw/main/packages/shelter-assets/svg/banner.svg)
+![Shield](https://github.com/uwu/shelter/raw/main/packages/shelter-assets/svg/banner.svg)
 
-_an attempt to prepare for the worst_
+_a worse attempt to prepare for the worst_
 
-[![wakatime](https://wakatime.com/badge/github/uwu/shelter.svg)](https://wakatime.com/badge/github/uwu/shelter)
+[![wakatime](https://wakatime.com/badge/github/Jackgawe/Shield.svg)](https://wakatime.com/badge/github/Jackgawe/Shield)
 
-shelter is a new generation client mod built to be essentially bulletproof.
+Shield is a new generation client mod built to be essentially bulletproof.
 
 It is developed by ex-members of the old Cumcord Team, under [uwu.network](https://uwu.network/).
 
