@@ -102,7 +102,7 @@ jobs:
           npm i -g pnpm
           pnpm i
       - name: Check formatting
-        run: pnpm dprint check
+        run: pnpm format:check
 
   typecheck:
     runs-on: ubuntu-latest
